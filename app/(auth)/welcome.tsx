@@ -64,7 +64,7 @@ const welcome = () => {
             .damping(12)}
         >
           {/* button */}
-          <Button onPress={() => router.push("/(tabs)/profile")}>
+          <Button onPress={() => router.push("/(auth)/register")}>
             <Typo size={22} color={colors.neutral900} fontWeight={"600"}>
               Get Started
             </Typo>
