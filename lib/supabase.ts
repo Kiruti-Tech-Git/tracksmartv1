@@ -9,9 +9,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Missing supabase environment variables");
 }
 
+// 👇 AsyncStorage adapter for Supabase
+const AsyncStorageAdapter = {
+  getItem: (key: string) => AsyncStorage.getItem(key),
+  setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
+  removeItem: (key: string) => AsyncStorage.removeItem(key),
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: AsyncStorage,
+    storage: AsyncStorageAdapter,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

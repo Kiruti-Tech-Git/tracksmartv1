@@ -3,14 +3,15 @@ import ScreenWrapper from "@/components/ScreenWrapper";
 import Typo from "@/components/Typo";
 import { colors, radius, spacingX, spacingY } from "@/constants/theme";
 import { getProfileImage } from "@/services/imageService";
-import { accountOptionType } from "@/types";
+import { accountOptionType, UserDataType } from "@/types";
 import { verticalScale } from "@/utils/styling";
 import { Image } from "expo-image";
 import * as Icons from "phosphor-react-native";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, StyleSheet, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
+import { getCurrentUserProfile } from "@/lib/getCurrentUserProfile";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { useRouter } from "expo-router";
@@ -18,6 +19,8 @@ import { useRouter } from "expo-router";
 const profile = () => {
   const { user } = useAuth();
   const router = useRouter();
+  // console.log("User data:", user);
+
   const accountOptions: accountOptionType[] = [
     {
       title: "Edit Profile",
@@ -76,6 +79,15 @@ const profile = () => {
       router.push(item.routeName);
     }
   };
+  const [profile, setProfile] = useState<UserDataType | null>(null);
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      const data = await getCurrentUserProfile();
+      setProfile(data);
+    };
+    loadProfile();
+  }, []);
 
   return (
     <ScreenWrapper>
@@ -88,7 +100,7 @@ const profile = () => {
           <View>
             {/* user Image*/}
             <Image
-              source={getProfileImage(user?.user_metadata?.image)}
+              source={getProfileImage(profile?.avatar_url)}
               style={styles.avatar}
               contentFit="cover"
               transition={100}
@@ -98,10 +110,10 @@ const profile = () => {
           {/* name and email */}
           <View style={styles.nameContainer}>
             <Typo size={24} fontWeight="600" color={colors.neutral100}>
-              {user?.user_metadata?.name || null}
+              {profile?.full_name ?? user?.user_metadata?.full_name}
             </Typo>
             <Typo size={15} color={colors.neutral400}>
-              {user?.email || "No email"}
+              {profile?.email || user?.email}
             </Typo>
           </View>
         </View>

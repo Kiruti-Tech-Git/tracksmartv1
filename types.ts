@@ -72,7 +72,7 @@ export type TransactionType = {
   description?: string;
   image?: any;
   uid?: string;
-  walletId: string;
+  accountId: string;
 };
 
 export type CategoryType = {
@@ -126,13 +126,25 @@ export type ImageUploadProps = {
 export type UserType = {
   uid?: string;
   email?: string | null;
-  name: string | null;
-  image?: any;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  username?: string | null;
+  website?: string | null;
+  updated_at?: string;
 } | null;
 
 export type UserDataType = {
-  name: string;
-  image?: any;
+  full_name?: string;
+  avatar_url?:
+    | string
+    | {
+        uri: string | boolean | undefined;
+        url: string;
+        public_id?: string;
+      };
+  username?: string;
+  email?: string;
+  name?: string;
 };
 
 export type AuthContextType = {
@@ -156,13 +168,20 @@ export type ResponseType = {
   msg?: string;
 };
 
-export type WalletType = {
-  id?: string;
-  name: string;
-  amount?: number;
-  totalIncome?: number;
-  totalExpenses?: number;
-  image: any;
-  uid?: string;
-  created?: Date;
+export type AccountType = {
+  id?: string; // From Supabase auto-generated PK
+  name: string; // Account name (e.g. Personal, Business)
+  image?: {
+    uri: string;
+    url?: string;
+  } | null; // Local file during upload, or Cloudinary URL
+  amount?: number; // Optional - cached current balance
+  totalIncome?: number; // Optional - total income cached
+  totalExpenses?: number; // Optional - total expenses cached
+  user_id?: string; // Link to user (auth or profiles table)
+  created_at?: string | Date; // ISO string or JS Date
+  updated_at?: string | Date; // ISO string or JS Date
+  balance?: number; // Optional - current balance, can be derived from transactions
 };
+
+//18.43 part 9
