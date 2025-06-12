@@ -1,3 +1,5 @@
+import { AuthProvider } from "@/providers/AuthProvider";
+import { CurrencyProvider } from "@/providers/CurrencyProvider";
 import { Stack } from "expo-router";
 import React from "react";
 
@@ -20,5 +22,12 @@ const StackLayout = () => {
   );
 };
 export default function RootLayout() {
-  return <StackLayout />;
+  return (
+    <AuthProvider>
+      <CurrencyProvider>
+        <StackLayout />
+        {/* The rest of your app components go here */}
+      </CurrencyProvider>
+    </AuthProvider>
+  );
 }

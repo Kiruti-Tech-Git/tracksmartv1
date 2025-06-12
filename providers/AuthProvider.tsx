@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setUser(session?.user ?? null);
 
       // For debugging
-      console.log("Auth state changed:", event, session?.user?.id);
+      // console.log("Auth state changed:", event, session?.user?.id);
     });
 
     return () => {

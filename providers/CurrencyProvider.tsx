@@ -6,9 +6,9 @@ type CurrencyCode = "KES" | "USD" | "EUR" | "GBP";
 
 // Exchange rates (we'll improve this later)
 const DEFAULT_RATES = {
-  USD: 0.0078, // 1 KES = 0.0078 USD
-  EUR: 0.0069, // 1 KES = 0.0072 EUR
-  GBP: 0.0058, // 1 KES = 0.0062 GBP
+  USD: 0.0077, // 1 KES = 0.0078 USD
+  EUR: 0.0067, // 1 KES = 0.0072 EUR
+  GBP: 0.0057, // 1 KES = 0.0062 GBP
   KES: 1, // 1 KES = 1 KES
 };
 
@@ -44,15 +44,20 @@ export const CurrencyProvider = ({
   const format = (amount: number, from: CurrencyCode = "KES"): string => {
     const convertedAmount = convert(amount, from);
 
+    const formatted = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(convertedAmount);
+
     switch (currency) {
       case "USD":
-        return `$${convertedAmount.toFixed(2)}`;
+        return `$${formatted}`;
       case "EUR":
-        return `€${convertedAmount.toFixed(2)}`;
+        return `€${formatted}`;
       case "GBP":
-        return `£${convertedAmount.toFixed(2)}`;
+        return `£${formatted}`;
       default:
-        return `KES ${convertedAmount.toFixed(2)}`;
+        return `KES ${formatted}`;
     }
   };
 

@@ -90,7 +90,7 @@ const AccountModal = () => {
       if (error) throw error;
       if (userData?.user) setUser(userData.user);
       router.back();
-      console.log("Account deleted successfully");
+      // console.log("Account deleted successfully");
     }
   };
 
@@ -141,7 +141,7 @@ const AccountModal = () => {
         </ScrollView>
       </View>
       <View style={styles.footer}>
-        {oldAccount?.id && (
+        {oldAccount?.id && !loading && (
           <Button
             onPress={showDeleteAlert}
             style={{

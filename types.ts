@@ -68,7 +68,7 @@ export type TransactionType = {
   type: string;
   amount: number;
   category?: string;
-  date: string | Date;
+  date: Date;
   description?: string;
   image?: any;
   uid?: string;
@@ -176,8 +176,8 @@ export type AccountType = {
     url?: string;
   } | null; // Local file during upload, or Cloudinary URL
   amount?: number; // Optional - cached current balance
-  totalIncome?: number; // Optional - total income cached
-  totalExpenses?: number; // Optional - total expenses cached
+  totalincome?: number; // Optional - total income cached
+  totalexpenses?: number; // Optional - total expenses cached
   user_id?: string; // Link to user (auth or profiles table)
   created_at?: string | Date; // ISO string or JS Date
   updated_at?: string | Date; // ISO string or JS Date

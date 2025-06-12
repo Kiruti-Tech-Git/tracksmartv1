@@ -19,7 +19,7 @@ export const updateUser = async (
 
     const authUid = user.id;
 
-    console.log("Updating user with uid:", authUid);
+    // console.log("Updating user with uid:", authUid);
 
     if (!authUid || typeof authUid !== "string") {
       return { success: false, msg: "Invalid or missing user ID" };
@@ -59,13 +59,13 @@ export const updateUser = async (
       .eq("id", authUid);
 
     if (error) {
-      console.error("Supabase error:", error);
+      // console.error("Supabase error:", error);
       return { success: false, msg: error.message };
     }
 
     return { success: true, msg: "Updated successfully" };
   } catch (error: any) {
-    console.error("Error updating user:", error);
+    // console.error("Error updating user:", error);
     return { success: false, msg: error?.message || "Something went wrong" };
   }
 };

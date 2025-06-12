@@ -1,66 +1,78 @@
-import { ResponseType, TransactionType, WalletType } from "@/types";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  getFirestore,
-  orderBy,
-  query,
-  setDoc,
-  Timestamp,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-import { uploadFileToCloudinary } from "./imageService";
-import { createOrUpdateWallet } from "./walletService";
+import { colors } from "@/constants/theme";
+import { supabase } from "@/lib/supabase";
+import { ResponseType, TransactionType } from "@/types";
 import { getLast12Months, getLast7Days, getYearsRange } from "@/utils/common";
 import { scale } from "@/utils/styling";
-import { colors } from "@/constants/theme";
+import { createOrUpdateAccount } from "./accountServices";
+import { uploadFileToCloudinary } from "./imageService";
 
-const firestore = getFirestore();
+export const fetchAllTransactions = async (
+  uid: string
+): Promise<ResponseType> => {
+  try {
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("uid", uid)
+      .order("date", { ascending: false });
+
+    if (error) throw error;
+
+    return { success: true, data: transactions };
+  } catch (error: any) {
+    // console.error("Error fetching all transactions:", error);
+    return { success: false, msg: error.message };
+  }
+};
 
 export const createOrUpdateTransaction = async (
   transactionData: Partial<TransactionType>
 ): Promise<ResponseType> => {
   try {
-    const { id, type, walletId, amount, image } = transactionData;
-    if (!amount || amount <= 0 || !walletId || !type) {
+    const { id, type, accountId, amount, image } = transactionData;
+
+    if (!amount || amount <= 0 || !accountId || !type) {
       return { success: false, msg: "Invalid transaction data!" };
     }
 
     if (id) {
-      // todo: update the transaction
-      const oldTransactionSnapshot = await getDoc(
-        doc(firestore, "transactions", id)
-      );
-      const oldTransaction = oldTransactionSnapshot.data() as TransactionType;
+      // Update existing transaction
+      const { data: oldTransaction, error: fetchError } = await supabase
+        .from("transactions")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (fetchError) throw fetchError;
+      if (!oldTransaction)
+        return { success: false, msg: "Transaction not found!" };
+
       const shouldRevertOriginal =
         oldTransaction.type != type ||
         oldTransaction.amount != amount ||
-        oldTransaction.walletId != walletId;
+        oldTransaction.accountId != accountId;
+
       if (shouldRevertOriginal) {
-        let res = await revertAndUpdateWalltes(
+        let res = await revertAndUpdateWallets(
           oldTransaction,
           Number(amount),
           type,
-          walletId
+          accountId
         );
         if (!res.success) return res;
       }
     } else {
-      // update wallet for new transaction
-      let res = await updateWalletForNewTransaction(
-        walletId!,
+      // Update account for new transaction
+      let res = await updateAccountForNewTransaction(
+        accountId!,
         Number(amount!),
         type
       );
       if (!res.success) return res;
     }
 
+    // Handle image upload
     if (image) {
-      //upload the image to cloudinary
       const imageUploadRes = await uploadFileToCloudinary(
         image,
         "transactions"
@@ -76,100 +88,124 @@ export const createOrUpdateTransaction = async (
       delete transactionData.image;
     }
 
-    const transactionRef = id
-      ? doc(firestore, "transactions", id)
-      : doc(collection(firestore, "transactions"));
+    // Upsert transaction
+    const { data: transaction, error } = id
+      ? await supabase
+          .from("transactions")
+          .update(transactionData)
+          .eq("id", id)
+          .select()
+          .single()
+      : await supabase
+          .from("transactions")
+          .insert(transactionData)
+          .select()
+          .single();
 
-    await setDoc(transactionRef, transactionData, { merge: true });
+    if (error) throw error;
+
     return {
       success: true,
-      data: { ...transactionData, id: transactionRef.id },
+      data: transaction,
     };
   } catch (error: any) {
-    console.log("error creating or updating the transaction:", error);
+    // console.log("error creating or updating the transaction:", error);
     return { success: false, msg: error.message };
   }
 };
 
-const updateWalletForNewTransaction = async (
-  walletId: string,
+const updateAccountForNewTransaction = async (
+  accountId: string,
   amount: number,
   type: string
 ) => {
   try {
-    const walletRef = doc(firestore, "wallets", walletId);
-    const walletSnapshot = await getDoc(walletRef);
-    if (!walletSnapshot.exists()) {
-      console.log("error updating the wallet for new transaction:");
-      return { success: false, msg: "Wallet not found!" };
-    }
-    const walletData = walletSnapshot.data() as WalletType;
-    if (type == "expenses" && walletData.amount! - amount < 0) {
-      return { success: false, msg: "Insufficient funds in Wallet!" };
+    const { data: account, error: fetchError } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", accountId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!account) return { success: false, msg: "Account not found!" };
+
+    if (type == "expense" && account.amount! - amount < 0) {
+      return { success: false, msg: "Insufficient funds in Account!" };
     }
 
-    const updateType = type == "income" ? "totalIncome" : "totalExpenses";
-    const updatedWalletAmount =
+    const updateType = type == "income" ? "totalIncome" : "totalexpense";
+    const updatedAccountAmount =
       type == "income"
-        ? Number(walletData.amount) + amount
-        : Number(walletData.amount) - amount;
+        ? Number(account.amount) + amount
+        : Number(account.amount) - amount;
 
     const updatedTotals =
       type == "income"
-        ? Number(walletData.totalIncome) + amount
-        : Number(walletData.totalExpenses) + amount;
+        ? Number(account.totalIncome) + amount
+        : Number(account.totalexpense) + amount;
 
-    await updateDoc(walletRef, {
-      amount: updatedWalletAmount,
-      [updateType]: updatedTotals,
-    });
-    return { success: true };
+    const { error } = await supabase
+      .from("accounts")
+      .update({
+        amount: updatedAccountAmount,
+        [updateType]: updatedTotals,
+      })
+      .eq("id", accountId);
+
+    if (error) throw error;
 
     return { success: true };
   } catch (error: any) {
-    console.log("error updating the wallet for new transaction:", error);
+    // console.log("error updating the account for new transaction:", error);
     return { success: false, msg: error.message };
   }
 };
 
-const revertAndUpdateWalltes = async (
+const revertAndUpdateWallets = async (
   oldTransaction: TransactionType,
   newTransactionAmount: number,
   newTransactionType: string,
-  newWalletId: string
+  newAccountId: string
 ) => {
   try {
-    const originalWalletSnapshot = await getDoc(
-      doc(firestore, "wallets", oldTransaction.walletId)
-    );
+    // Get original account
+    const { data: originalAccount, error: originalAccountError } =
+      await supabase
+        .from("accounts")
+        .select("*")
+        .eq("id", oldTransaction.accountId)
+        .single();
 
-    const originalWallet = originalWalletSnapshot.data() as WalletType;
+    if (originalAccountError) throw originalAccountError;
+    if (!originalAccount)
+      return { success: false, msg: "Original account not found!" };
 
-    let newWalletSnapshot = await getDoc(
-      doc(firestore, "wallets", newWalletId)
-    );
-    let newWallet = newWalletSnapshot.data() as WalletType;
+    // Get new account
+    const { data: newAccount, error: newAccountError } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", newAccountId)
+      .single();
+
+    if (newAccountError) throw newAccountError;
+    if (!newAccount) return { success: false, msg: "New account not found!" };
 
     const revertType =
-      oldTransaction.type == "income" ? "totalIncome" : "totalExpenses";
-
-    const revertIncomeExpense: number =
+      oldTransaction.type == "income" ? "totalIncome" : "totalexpense";
+    const revertIncomeExpense =
       oldTransaction.type == "income"
         ? -Number(oldTransaction.amount)
         : Number(oldTransaction.amount);
 
-    const revertedWalletAmount =
-      Number(originalWallet.amount) + revertIncomeExpense;
-
+    const revertedAccountAmount =
+      Number(originalAccount.amount) + revertIncomeExpense;
     const revertedIncomeExpenseAmount =
-      Number(originalWallet[revertType]) - Number(oldTransaction.amount);
+      Number(originalAccount[revertType]) - Number(oldTransaction.amount);
 
-    if (newTransactionType == "expenses") {
-      // if user tries to convert an income transaction to expense on same wallet
-      // or if user tries to increase the expense amount and doesn't have enough funds
+    if (newTransactionType == "expense") {
       if (
-        oldTransaction.walletId == newWalletId &&
-        revertedWalletAmount < newTransactionAmount
+        oldTransaction.accountId == newAccountId &&
+        revertedAccountAmount < newTransactionAmount
       ) {
         return {
           success: false,
@@ -177,8 +213,7 @@ const revertAndUpdateWalltes = async (
         };
       }
 
-      // if user tries to add an expense from a new wallet but the wallet doesn't have enough funds
-      if (newWallet.amount! < newTransactionAmount) {
+      if (newAccount.amount! < newTransactionAmount) {
         return {
           success: false,
           msg: "Insufficient funds in Selected Account!",
@@ -186,137 +221,138 @@ const revertAndUpdateWalltes = async (
       }
     }
 
-    await createOrUpdateWallet({
-      id: oldTransaction.walletId,
-      amount: revertedWalletAmount,
+    // Revert original account
+    await createOrUpdateAccount({
+      id: oldTransaction.accountId,
+      amount: revertedAccountAmount,
       [revertType]: revertedIncomeExpenseAmount,
     });
-    //revert completed
 
-    //////////////////////////////////////////////////////////////////
-
-    // refetch the new wallet data
-    newWalletSnapshot = await getDoc(doc(firestore, "wallets", newWalletId));
-    newWallet = newWalletSnapshot.data() as WalletType;
-
+    // Update new account with new transaction
     const updateType =
-      newTransactionType == "income" ? "totalIncome" : "totalExpenses";
-    const updatedTransactionAmount: number =
+      newTransactionType == "income" ? "totalIncome" : "totalexpense";
+    const updatedTransactionAmount =
       newTransactionType == "income"
         ? Number(newTransactionAmount)
         : -Number(newTransactionAmount);
 
-    const newWalletAmount = Number(newWallet.amount) + updatedTransactionAmount;
-
+    const newAccountAmount =
+      Number(newAccount.amount) + updatedTransactionAmount;
     const newIncomeExpenseAmount = Number(
-      newWallet[updateType]! + Number(newTransactionAmount)
+      newAccount[updateType]! + Number(newTransactionAmount)
     );
 
-    await createOrUpdateWallet({
-      id: newWalletId,
-      amount: newWalletAmount,
+    await createOrUpdateAccount({
+      id: newAccountId,
+      amount: newAccountAmount,
       [updateType]: newIncomeExpenseAmount,
     });
+
     return { success: true };
   } catch (error: any) {
-    console.log("error updating the wallet for new transaction:", error);
+    // console.log("error updating the account for new transaction:", error);
     return { success: false, msg: error.message };
   }
 };
 
 export const deleteTransaction = async (
   transactionId: string,
-  walletId: string
-) => {
+  accountId: string
+): Promise<ResponseType> => {
   try {
+    // Get transaction data
+    const { data: transaction, error: fetchError } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", transactionId)
+      .single();
 
-    const transactionRef = doc(firestore, "transactions", transactionId);
-    const transactionSnapshot = await getDoc(
-      transactionRef
-    );
+    if (fetchError) throw fetchError;
+    if (!transaction) return { success: false, msg: "Transaction not found!" };
 
-    if (!transactionSnapshot.exists()) {
-      return { success: false, msg: "Transaction not found!" };
-    }
-    const transactionData = transactionSnapshot.data() as TransactionType;
+    const transactionType = transaction.type;
+    const transactionAmount = transaction.amount;
 
-    const transactionType = transactionData.type;
-    const transactionAmount = transactionData?.amount;
+    // Get account data
+    const { data: account, error: accountError } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", accountId)
+      .single();
 
-    // fetch the wallet data
-    const walletSnapshot = await getDoc(doc(firestore, "wallets", walletId));
-    const walletData = walletSnapshot.data() as WalletType;
+    if (accountError) throw accountError;
+    if (!account) return { success: false, msg: "Account not found!" };
 
-    // check fields to update based on transaction type
-    const updatetype =
-      transactionType == "income" ? "totalIncome" : "totalExpenses";
-    const newWalletAmount =
-      walletData?.amount! -
+    // Calculate new values
+    const updateType =
+      transactionType == "income" ? "totalIncome" : "totalexpense";
+    const newAccountAmount =
+      account.amount! -
       (transactionType == "income" ? transactionAmount : -transactionAmount);
-    
-    const newIncomeExpenseAmount = walletData[updatetype]! - transactionAmount;
+    const newIncomeExpenseAmount = account[updateType]! - transactionAmount;
 
-    // if its expense and wallet amount can go below 0
-    if (transactionType == "expenses" && newWalletAmount < 0) {
-      return { success: false, msg: "You cannot delete this transaction !" };
+    if (transactionType == "expense" && newAccountAmount < 0) {
+      return { success: false, msg: "You cannot delete this transaction!" };
     }
 
-    await createOrUpdateWallet({
-      id: walletId,
-      amount: newWalletAmount,
-      [updatetype]: newIncomeExpenseAmount,
-    })
+    // Update account
+    await createOrUpdateAccount({
+      id: accountId,
+      amount: newAccountAmount,
+      [updateType]: newIncomeExpenseAmount,
+    });
 
-    await deleteDoc(transactionRef)
+    // Delete transaction
+    const { error: deleteError } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", transactionId);
+
+    if (deleteError) throw deleteError;
 
     return { success: true };
   } catch (error: any) {
-    console.log("error updating the wallet for new transaction:", error);
+    // console.log("error deleting transaction:", error);
     return { success: false, msg: error.message };
   }
 };
 
-
-export const fetchWeeklyStats = async (
-  uid: string,
-): Promise<ResponseType> => {
+export const fetchWeeklyStats = async (uid: string): Promise<ResponseType> => {
   try {
-    const db = firestore
-    const today = new Date()
-    const sevenDavysAgo = new Date(today)
-    sevenDavysAgo.setDate(today.getDate() - 7)
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
 
-    const transactionsQuery = query(
-      collection(db, 'transactions'),
-      where("date", ">=", Timestamp.fromDate(sevenDavysAgo)),
-      where("date", "<=", Timestamp.fromDate(today)),
-      orderBy("date", "desc"),
-      where("uid", "==", uid)
-    )
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .gte("date", sevenDaysAgo.toISOString())
+      .lte("date", today.toISOString())
+      .order("date", { ascending: false })
+      .eq("uid", uid);
 
-    const querySnapshot = await getDocs(transactionsQuery)
-    const weeklyData = getLast7Days()
-    const transactions: TransactionType[] = []
+    if (error) throw error;
 
-    // mapping the transactions to the weeklyData
-    querySnapshot.forEach((doc) => {
-      const transaction = doc.data() as TransactionType
-      transaction.id = doc.id
-      transactions.push(transaction)
+    const weeklyData = getLast7Days();
+    const mappedTransactions: TransactionType[] = [];
 
-      const transactionDate = (transaction.date as Timestamp).toDate().toISOString().split('T')[0]
+    transactions?.forEach((transaction) => {
+      mappedTransactions.push(transaction);
 
-      const dayData = weeklyData.find((day) => day.date == transactionDate)
+      const transactionDate = new Date(transaction.date)
+        .toISOString()
+        .split("T")[0];
+      const dayData = weeklyData.find((day) => day.date == transactionDate);
 
       if (dayData) {
-        if(transaction.type == 'income'){
-          dayData.income += transaction.amount
-        } else if(transaction.type == 'expenses'){
-          dayData.expenses += transaction.amount
+        if (transaction.type == "income") {
+          dayData.income += transaction.amount;
+        } else if (transaction.type == "expense") {
+          dayData.expense += transaction.amount;
         }
       }
-    })
-    // takes each day and creates 2 entries
+    });
+
     const stats = weeklyData.flatMap((day) => [
       {
         value: day.income,
@@ -326,70 +362,64 @@ export const fetchWeeklyStats = async (
         frontColor: "#01af5d",
       },
       {
-        value: day.expenses,
+        value: day.expense,
         frontColor: colors.rose,
       },
     ]);
+
     return {
       success: true,
       data: {
         stats,
-        transactions,
-      }
-    }
+        transactions: mappedTransactions,
+      },
+    };
   } catch (error) {
-   console.log("error fetching weekly transactions:", error);
-   return { success: false, msg: "Failed to fetch weekly transactions" };
+    // console.log("error fetching weekly transactions:", error);
+    return { success: false, msg: "Failed to fetch weekly transactions" };
   }
 };
 
-export const fetchWMonthlyStats = async (uid: string): Promise<ResponseType> => {
+export const fetchMonthlyStats = async (uid: string): Promise<ResponseType> => {
   try {
-    const db = firestore;
     const today = new Date();
     const twelveMonthsAgo = new Date(today);
     twelveMonthsAgo.setMonth(today.getMonth() - 12);
 
-    const transactionsQuery = query(
-      collection(db, "transactions"),
-      where("date", ">=", Timestamp.fromDate(twelveMonthsAgo)),
-      where("date", "<=", Timestamp.fromDate(today)),
-      orderBy("date", "desc"),
-      where("uid", "==", uid)
-    );
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .gte("date", twelveMonthsAgo.toISOString())
+      .lte("date", today.toISOString())
+      .order("date", { ascending: false })
+      .eq("uid", uid);
 
-    const querySnapshot = await getDocs(transactionsQuery);
+    if (error) throw error;
+
     const monthlyData = getLast12Months();
-    const transactions: TransactionType[] = [];
+    const mappedTransactions: TransactionType[] = [];
 
-    // mapping the transactions to the monthly data
-    querySnapshot.forEach((doc) => {
-      const transaction = doc.data() as TransactionType;
-      transaction.id = doc.id;
-      transactions.push(transaction);
+    transactions?.forEach((transaction) => {
+      mappedTransactions.push(transaction);
 
-      const transactionDate = (transaction.date as Timestamp)
-        .toDate()
-        // .toISOString()
-        // .split("T")[0];
-
+      const transactionDate = new Date(transaction.date);
       const monthName = transactionDate.toLocaleString("default", {
         month: "short",
-      })
+      });
       const shortYear = transactionDate.getFullYear().toString().slice(-2);
       const monthData = monthlyData.find(
         (month) => month.month === `${monthName} ${shortYear}`
-      )
+      );
 
       if (monthData) {
         if (transaction.type == "income") {
           monthData.income += transaction.amount;
-        } else if (transaction.type == "expenses") {
-          monthData.expenses += transaction.amount;
+        } else if (transaction.type == "expense") {
+          monthData.expense += transaction.amount;
         }
       }
     });
-    // takes each day and creates 2 entries
+
     const stats = monthlyData.flatMap((month) => [
       {
         value: month.income,
@@ -399,58 +429,54 @@ export const fetchWMonthlyStats = async (uid: string): Promise<ResponseType> => 
         frontColor: "#01af5d",
       },
       {
-        value: month.expenses,
+        value: month.expense,
         frontColor: colors.rose,
       },
     ]);
+
     return {
       success: true,
       data: {
         stats,
-        transactions,
+        transactions: mappedTransactions,
       },
     };
   } catch (error) {
-    console.log("error fetching monthly transactions:", error);
+    // console.log("error fetching monthly transactions:", error);
     return { success: false, msg: "Failed to fetch monthly transactions" };
   }
 };
 
-export const fetchYearlyStats = async (
-  uid: string
-): Promise<ResponseType> => {
+export const fetchYearlyStats = async (uid: string): Promise<ResponseType> => {
   try {
-    const db = firestore;
-   
-    const transactionsQuery = query(
-      collection(db, "transactions"),
-      orderBy("date", "desc"),
-      where("uid", "==", uid)
+    // Get all transactions to determine date range
+    const { data: transactions, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .order("date", { ascending: false })
+      .eq("uid", uid);
+
+    if (error) throw error;
+    if (!transactions || transactions.length === 0) {
+      return { success: true, data: { stats: [], transactions: [] } };
+    }
+
+    // Find earliest transaction date
+    const firstTransactionDate = transactions.reduce(
+      (earliest, transaction) => {
+        const transactionDate = new Date(transaction.date);
+        return transactionDate < earliest ? transactionDate : earliest;
+      },
+      new Date()
     );
 
-    const querySnapshot = await getDocs(transactionsQuery);
-    const transactions: TransactionType[] = [];
+    const firstYear = firstTransactionDate.getFullYear();
+    const currentYear = new Date().getFullYear();
+    const yearlyData = getYearsRange(firstYear, currentYear);
 
-    const firstTransaction = querySnapshot.docs.reduce((earliest, doc) => {
-      const transactionDate = doc.data().date.toDate();
-      return transactionDate < earliest ? transactionDate: earliest
-    }, new Date)
-
-    const firstYear = firstTransaction.getFullYear()
-    const currentYear = new Date().getFullYear()
-
-    const yearlyData = getYearsRange(firstYear, currentYear)
-
-    // mapping the transactions to the monthly data
-    querySnapshot.forEach((doc) => {
-      const transaction = doc.data() as TransactionType;
-      transaction.id = doc.id;
-      transactions.push(transaction);
-
-      const transactionYear = (transaction.date as Timestamp).toDate().getFullYear();
-      // .toISOString()
-      // .split("T")[0];
-
+    // Map transactions to yearly data
+    transactions.forEach((transaction) => {
+      const transactionYear = new Date(transaction.date).getFullYear();
       const yearData = yearlyData.find(
         (item: any) => item.year === transactionYear.toString()
       );
@@ -458,12 +484,12 @@ export const fetchYearlyStats = async (
       if (yearData) {
         if (transaction.type == "income") {
           yearData.income += transaction.amount;
-        } else if (transaction.type == "expenses") {
-          yearData.expenses += transaction.amount;
+        } else if (transaction.type == "expense") {
+          yearData.expense += transaction.amount;
         }
       }
     });
-    // takes each day and creates 2 entries
+
     const stats = yearlyData.flatMap((year: any) => [
       {
         value: year.income,
@@ -473,10 +499,11 @@ export const fetchYearlyStats = async (
         frontColor: "#01af5d",
       },
       {
-        value: year.expenses,
+        value: year.expense,
         frontColor: colors.rose,
       },
     ]);
+
     return {
       success: true,
       data: {
@@ -485,12 +512,7 @@ export const fetchYearlyStats = async (
       },
     };
   } catch (error) {
-    console.log("error fetching yearly transactions:", error);
-    return { success: false, msg: 'Failed to fetch yearly transactions' };
+    // console.log("error fetching yearly transactions:", error);
+    return { success: false, msg: "Failed to fetch yearly transactions" };
   }
 };
-
-
-
-
-

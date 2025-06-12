@@ -1,3 +1,6 @@
+import { useFocusEffect } from "expo-router"; // or '@react-navigation/native'
+import { useCallback } from "react";
+
 import Header from "@/components/Header";
 import ScreenWrapper from "@/components/ScreenWrapper";
 import Typo from "@/components/Typo";
@@ -7,7 +10,7 @@ import { accountOptionType, UserDataType } from "@/types";
 import { verticalScale } from "@/utils/styling";
 import { Image } from "expo-image";
 import * as Icons from "phosphor-react-native";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Alert, StyleSheet, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
@@ -81,13 +84,15 @@ const profile = () => {
   };
   const [profile, setProfile] = useState<UserDataType | null>(null);
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      const data = await getCurrentUserProfile();
-      setProfile(data);
-    };
-    loadProfile();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const loadProfile = async () => {
+        const data = await getCurrentUserProfile();
+        setProfile(data);
+      };
+      loadProfile();
+    }, [])
+  );
 
   return (
     <ScreenWrapper>
