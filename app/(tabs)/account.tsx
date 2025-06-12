@@ -12,9 +12,11 @@ import { verticalScale } from "@/utils/styling";
 import { useRouter } from "expo-router";
 import * as Icons from "phosphor-react-native";
 
+import { useCurrency } from "@/providers/CurrencyProvider";
 import { FlatList, StyleSheet, TouchableOpacity, View } from "react-native";
 
 const Account = () => {
+  const { format, currency } = useCurrency();
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,9 +65,9 @@ const Account = () => {
         {/* Balance View */}
         <View style={styles.balanceView}>
           <View style={{ alignItems: "center" }}>
-            <Typo size={45} fontWeight={"500"}>
-              {/* {format(getTotalBalance(), currency)} */}KES{" "}
-              {getTotalBalance().toFixed(2)}
+            <Typo size={25} fontWeight={"500"}>
+              {/* {format(getTotalBalance(), currency)} */}
+              {format(getTotalBalance())}
             </Typo>
             <Typo size={16} color={colors.neutral300}>
               Total Balance

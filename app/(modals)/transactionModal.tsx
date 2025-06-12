@@ -10,6 +10,7 @@ import { colors, radius, spacingX, spacingY } from "@/constants/theme";
 import useFetchData from "@/hooks/useFetchData";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { useCurrency } from "@/providers/CurrencyProvider";
 import { deleteTransaction } from "@/services/transactionService";
 import { AccountType, TransactionType } from "@/types";
 import { scale, verticalScale } from "@/utils/styling";
@@ -23,6 +24,8 @@ import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
 
 const TransactionModal = () => {
+  const { format } = useCurrency();
+
   const { user } = useAuth();
   const router = useRouter();
 
@@ -186,7 +189,7 @@ const TransactionModal = () => {
         result = data;
       }
 
-      // console.log("Transaction successful:", result);
+      // console.log("Transaction successful:", result);auth
       router.back();
     } catch (error) {
       // console.error("Transaction error:", error);
@@ -252,7 +255,10 @@ const TransactionModal = () => {
               placeholderStyle={styles.dropdownPlaceholder}
               selectedTextStyle={styles.dropdownSelectedText}
               data={accounts.map((account) => ({
-                label: `${account.name} (KES ${account.amount})`,
+                label:
+                  account.amount != null
+                    ? `${account.name} (${format(account.amount)})`
+                    : account.name,
                 value: account.id,
               }))}
               value={transaction.accountId}

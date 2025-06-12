@@ -1,4 +1,5 @@
 import { colors, radius, spacingX } from "@/constants/theme";
+import { useCurrency } from "@/providers/CurrencyProvider";
 import { AccountType } from "@/types";
 import { verticalScale } from "@/utils/styling";
 import { Image, ImageSource } from "expo-image";
@@ -29,6 +30,7 @@ const AccountListItem = ({
       },
     });
   };
+  const { format } = useCurrency();
 
   // Properly type the image source
   const getImageSource = (): ImageSource => {
@@ -66,7 +68,7 @@ const AccountListItem = ({
         <View style={styles.nameContainer}>
           <Typo size={16}>{item.name}</Typo>
           <Typo size={14} color={colors.neutral400}>
-            KES {(item.amount ?? 0).toFixed(2)}
+            {format(item.amount ?? 0)}
           </Typo>
         </View>
         <Icons.CaretRight
