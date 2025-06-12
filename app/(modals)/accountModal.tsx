@@ -1,20 +1,23 @@
 import BackButton from "@/components/BackButton";
 import Button from "@/components/Button";
 import Header from "@/components/Header";
+import ImageUpload from "@/components/ImageUpload";
 import Input from "@/components/Input";
 import ModalWrapper from "@/components/ModalWrapper";
 import Typo from "@/components/Typo";
 import { colors, spacingX, spacingY } from "@/constants/theme";
-import { AccountType } from "@/types";
-import { scale, verticalScale } from "@/utils/styling";
-import React, { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
-
-import ImageUpload from "@/components/ImageUpload";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { createOrUpdateAccount } from "@/services/accountServices";
+import {
+  createOrUpdateAccount,
+  deleteAccount,
+} from "@/services/accountServices";
+import { AccountType } from "@/types";
+import { scale, verticalScale } from "@/utils/styling";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Icons from "phosphor-react-native";
+import React, { useEffect, useState } from "react";
+import { Alert, ScrollView, StyleSheet, View } from "react-native";
 
 type AccountParams = {
   id?: string;
@@ -77,6 +80,38 @@ const AccountModal = () => {
     }
   };
 
+  const onDelete = async () => {
+    if (!oldAccount?.id) return;
+    setLoading(true);
+    const res = await deleteAccount(oldAccount?.id);
+    setLoading(false);
+    if (res.success) {
+      const { data: userData, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      if (userData?.user) setUser(userData.user);
+      router.back();
+      console.log("Account deleted successfully");
+    }
+  };
+
+  const showDeleteAlert = () => {
+    Alert.alert(
+      "Confirm",
+      "Are you sure you want to delete this account? \n This action will delete all associated transactions.",
+      [
+        {
+          text: "Cancel",
+          onPress: () => console.log("Cancel delete"),
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          onPress: () => onDelete(),
+          style: "destructive",
+        },
+      ]
+    );
+  };
   return (
     <ModalWrapper>
       <View style={styles.container}>
@@ -106,6 +141,21 @@ const AccountModal = () => {
         </ScrollView>
       </View>
       <View style={styles.footer}>
+        {oldAccount?.id && (
+          <Button
+            onPress={showDeleteAlert}
+            style={{
+              backgroundColor: colors.rose,
+              paddingHorizontal: spacingX._15,
+            }}
+          >
+            <Icons.Trash
+              color={colors.white}
+              size={verticalScale(24)}
+              weight="bold"
+            />
+          </Button>
+        )}
         <Button onPress={onSubmit} loading={loading} style={{ flex: 1 }}>
           <Typo color={colors.black} fontWeight={"700"}>
             {oldAccount?.id ? "Update Account" : "Add Account"}

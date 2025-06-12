@@ -75,3 +75,37 @@ export const createOrUpdateAccount = async (
     };
   }
 };
+
+export const deleteAccount = async (
+  accountId: string
+): Promise<ResponseType> => {
+  try {
+    // 1. Get current session
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, msg: "Authentication required" };
+    }
+
+    // 2. Delete account
+    const { error } = await supabase
+      .from("accounts")
+      .delete()
+      .eq("id", accountId)
+      .eq("user_id", user.id);
+
+    // todo: Delete associated transactions if needed
+    if (error) throw error;
+
+    return { success: true, msg: "Account deleted successfully" };
+  } catch (error: any) {
+    console.error("Delete account error:", error);
+    return {
+      success: false,
+      msg: error.message || "Failed to delete account",
+    };
+  }
+};

@@ -1,31 +1,61 @@
+import { supabase } from "@/lib/supabase"; // Assuming you're fetching from Supabase directly
+import { useFocusEffect } from "expo-router"; // or '@react-navigation/native'
+import React, { useCallback, useState } from "react";
+
 import AccountListItem from "@/components/accountListItem";
 import Loading from "@/components/Loading";
 import ScreenWrapper from "@/components/ScreenWrapper";
 import Typo from "@/components/Typo";
 import { colors, radius, spacingX, spacingY } from "@/constants/theme";
-import useFetchData from "@/hooks/useFetchData";
 import { AccountType } from "@/types";
 import { verticalScale } from "@/utils/styling";
 import { useRouter } from "expo-router";
 import * as Icons from "phosphor-react-native";
-import React from "react";
+
 import { FlatList, StyleSheet, TouchableOpacity, View } from "react-native";
 
 const Account = () => {
   const router = useRouter();
+  const [accounts, setAccounts] = useState<AccountType[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAccounts = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("accounts")
+      .select("*")
+      .order("created", { ascending: false });
+
+    if (error) {
+      console.error("Fetch error", error.message);
+    } else {
+      setAccounts(data || []);
+    }
+
+    setLoading(false);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchAccounts(); // 👈 Refresh when screen regains focus
+    }, [])
+  );
 
   const getTotalBalance = () =>
-    // This function can be implemented to calculate the total balance
-    accounts.reduce((total, item) => {
-      total = total + (item.amount || 0);
-      return total;
-    }, 0);
+    accounts.reduce((total, item) => total + (item.amount || 0), 0);
 
-  const {
-    data: accounts,
-    error,
-    loading,
-  } = useFetchData<AccountType>("accounts", []);
+  // const getTotalBalance = () =>
+  //   // This function can be implemented to calculate the total balance
+  //   accounts.reduce((total, item) => {
+  //     total = total + (item.amount || 0);
+  //     return total;
+  //   }, 0);
+
+  // const {
+  //   data: accounts,
+  //   error,
+  //   loading,
+  // } = useFetchData<AccountType>("accounts", []);
 
   return (
     <ScreenWrapper style={{ backgroundColor: colors.black }}>
